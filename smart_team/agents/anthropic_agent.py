@@ -1,6 +1,6 @@
 from anthropic import Anthropic
 from typing import Dict, List
-from smart_team.types import Result, FunctionCall
+from smart_team.types import Result, FunctionCall, FunctionType
 from smart_team.agents.base_agent import BaseAgent
 from dynamic_agent.utils.function_schema import create_function_schema, SchemaFormat
 
@@ -46,13 +46,22 @@ class AnthropicAgent(BaseAgent):
                 # Add function call information
                 result.function_calls.append(
                     FunctionCall(
-                        function_type=(
-                            "transfer"
-                            if block.name.startswith("transfer_to_")
-                            else "tool"
-                        ),
                         name=block.name,
                         parameters=block.input,
+                        function_type=[
+                            FunctionType(
+                                function_type=(
+                                    "transfer"
+                                    if block.name.startswith("transfer_to_")
+                                    else "tool"
+                                ),
+                                agent_type=(
+                                    "executor"
+                                    if block.name.startswith("transfer_to_")
+                                    else None
+                                ),
+                            )
+                        ],
                     )
                 )
 

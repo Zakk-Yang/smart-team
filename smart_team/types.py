@@ -18,12 +18,10 @@ class FunctionType(BaseModel):
     """Defines the type and behavior of a function in the agent system.
 
     Attributes:
-        is_agent: Whether this function represents an agent operation
         function_type: The type of function - either "transfer" for agent handoffs or "tool" for utility functions
         agent_type: The specific type of agent if is_agent is True - can be orchestrator, executor, fixer, or evaluator
     """
 
-    is_agent: bool
     function_type: Optional[Literal["transfer", "tool"]]
     agent_type: Optional[Literal["orchestrator", "executor", "fixer", "evaluator"]]
 

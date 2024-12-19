@@ -1,32 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Callable, Dict, Optional, Any
+from typing import List, Callable, Dict, Literal, Optional, Any
 from enum import Enum
 from pydantic import BaseModel
-
-
-class FunctionType(Enum):
-    """Types of functions that can be executed by agents"""
-
-    IS_AGENT: bool = None
-    ORCHESTRATOR = "orchestrator"
-    EXECUTOR = "executor"
-    FIXER = "fixer"
-    NONE = "none"
-
-
-class FunctionCall(BaseModel):
-    """Represents a single function call in the response"""
-
-    type: FunctionType
-    name: str
-    parameters: Dict[str, Any] = {}
-
-
-class Result(BaseModel):
-    """Represents the result of an agent's action or response"""
-
-    text: Optional[str] = None
-    function_calls: List[FunctionCall] = []
+from smart_team.types import Result
 
 
 class BaseAgent(ABC):
@@ -38,9 +14,11 @@ class BaseAgent(ABC):
         description: str,
         instructions: str,
         functions: Optional[List[Callable]] = None,
+        agent_type: Optional[Literal["orchestrator", "executor", "fixer"]] = None,
         **kwargs,
     ):
         self.name = name
+        self.agent_type = agent_type
         self.description = description
         self.instructions = instructions
         self.functions = functions or []
