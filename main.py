@@ -34,9 +34,10 @@ def main():
         name="WeatherBot",
         instructions="""
         You are the weather bot. Your role is to:
-        1. Get weather information for specified locations
-        2. Return to the orchestrator after completing the task
-        Note: Always transfer back to orchestrator when done
+        1. Get weather information for specified locations if not already retrieved
+        2. If weather was already checked (in completed_function_calls), just summarize the results
+        3. Return to the orchestrator after completing the task
+        Note: Always check completed_function_calls before making new requests
         """,
         api_key=api_key,
         functions=[get_weather, transfer_to_orchestrator],
@@ -69,8 +70,9 @@ def main():
         instructions="""
         You are the orchestrator bot. Your role is to:
         1. Understand user requests and determine which bot should handle them
-        2. Transfer control to the appropriate bot
-        3. Maintain context and ensure smooth handoffs
+        2. Transfer control to the appropriate bot if the task hasn't been completed
+        3. If a task has already been completed (check completed_function_calls), summarize the results instead of transferring
+        4. Maintain context and ensure smooth handoffs
         """,
         api_key=api_key,
         functions=[transfer_to_code, transfer_to_weather],
@@ -145,7 +147,7 @@ def main():
                         print(f"{active_agent.name} response:", result)
                         continue
 
-                # Handle transfers after all regular functions are done
+                # Handle transfer if there are any transfer functions
                 if transfer_functions:
                     function_call = transfer_functions[0]  # Process first transfer
                     func_name = function_call["name"]
@@ -154,9 +156,12 @@ def main():
                         None,
                     )
                     if func:
-                        new_agent = func()
-                        print(f"Transferring to {new_agent.name}")
-                        active_agent = new_agent
+                        print(f"Transferring to {func_name.split('_')[-1]}")
+                        # Share completed function calls with the next agent
+                        next_agent = func()
+                        next_agent.completed_function_calls = active_agent.completed_function_calls.copy()
+                        next_agent.current_task = active_agent.current_task
+                        active_agent = next_agent
                         result = active_agent.send_message(user_input)
                         print(f"{active_agent.name} response:", result)
                         continue
