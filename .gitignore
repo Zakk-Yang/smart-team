@@ -45,3 +45,5 @@ ENV/
 .LSOverride
 Icon
 ._*
+*env*
+*code*
