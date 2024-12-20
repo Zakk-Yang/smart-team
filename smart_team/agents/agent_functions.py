@@ -92,7 +92,7 @@ def install_package(env_name: str, package: str) -> str:
             return f"Error: pip not found in environment {env_name}. Please ensure the environment is created correctly."
 
         print(f"Installing Python package {package}...")
-        
+
         # Use subprocess.run with full pip path
         result = subprocess.run(
             [pip_path, "install", package.strip()],
@@ -100,7 +100,7 @@ def install_package(env_name: str, package: str) -> str:
             capture_output=True,
             text=True,
         )
-        
+
         if result.returncode == 0:
             print(result.stdout)
             return f"Successfully installed {package}"

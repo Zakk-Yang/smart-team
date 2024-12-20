@@ -34,10 +34,9 @@ def main():
         name="WeatherBot",
         instructions="""
         You are the weather bot. Your role is to:
-        1. Get weather information for specified locations if not already retrieved
-        2. If weather was already checked (in completed_function_calls), just summarize the results
-        3. Return to the orchestrator after completing the task
-        Note: Always check completed_function_calls before making new requests
+        1. Get weather information for specified locations
+        2. After completing the task, return control to orchestrator
+        3. DO NOT suggest additional weather checks unless asked by the user
         """,
         api_key=api_key,
         functions=[get_weather, transfer_to_orchestrator],
@@ -46,14 +45,12 @@ def main():
     # Initialize the code bot
     code_bot = AnthropicAgent(
         name="CodeBot",
-        instructions="""You are the coding assistant. Your role is to:
+        instructions="""
+        You are the coding assistant. Your role is to:
         1. Help users with coding tasks and questions
-        2. Create env (always use the name python_env), install related packages, generate, analyze and debug code
-        3. When installing packages, you MUST:
-           - List ALL required packages in a SINGLE response
-           - Call install_package function for EACH package in the SAME response
-           - Example: If you need packages A, B, and C, return ALL three install_package calls at once
-           - Never split package installations across multiple responses
+        2. Create env (stick to the env name as python_env), install packages, generate and debug code
+        3. After completing a task, return control to orchestrator
+        4. DO NOT suggest additional coding tasks unless asked by the user
         """,
         api_key=api_key,
         functions=[
@@ -69,46 +66,82 @@ def main():
         name="OrchestratorBot",
         instructions="""
         You are the orchestrator bot. Your role is to:
-        1. Understand user requests and determine which bot should handle them
-        2. Transfer control to the appropriate bot if the task hasn't been completed
-        3. If a task has already been completed (check completed_function_calls), summarize the results instead of transferring
-        4. Maintain context and ensure smooth handoffs
+        1. For NEW user requests:
+           - Analyze the request and determine which bot should handle it
+           - Transfer control to the appropriate bot using transfer functions
+        
+        2. For COMPLETED tasks (when control returns to you):
+           - DO NOT analyze the request again
+           - DO NOT transfer to any other bot
+           - Simply print: "What would you like to do next?"
+           - Wait for new user input
+
+        3. When you see completed function calls in your history:
+           - Consider those tasks as already done
+           - DO NOT try to execute them again
+           - DO NOT transfer to another bot to repeat them
+           
+        Remember: You should ONLY transfer to another bot when receiving a NEW request from the user,
+        NEVER when receiving control back after a completed task.
         """,
         api_key=api_key,
         functions=[transfer_to_code, transfer_to_weather],
     )
 
     active_agent = orchestrator
+    should_continue = True
+
     while True:
         try:
-            # Get user input
-            user_input = input("User: ")
-            if not user_input:
-                continue
+            user_input = input("\nEnter your request (or 'exit' to quit): ")
+            if user_input.lower() == "exit":
+                break
 
-            # Process user input through active agent
+            # Process user input with current agent
             result = active_agent.send_message(user_input)
-            print(f"{active_agent.name} response:", result)
+            if result.text:
+                print(f"\n{result.text}")
 
             # Process any function calls
-            while result and result.function_calls:
+            while result and result.function_calls and should_continue:
                 executed_functions = []
-                transfer_functions = []
-                regular_functions = []
+                current_calls = result.function_calls
+                result.function_calls = []  # Reset to avoid infinite loop
 
-                # Separate transfer and regular functions
-                for function_call in result.function_calls:
-                    if function_call["name"].startswith("transfer_to_"):
-                        transfer_functions.append(function_call)
+                for func_call in current_calls:
+                    func_name = func_call["name"]
+                    print(f"\nExecuting {func_name}...")
+
+                    if func_name.startswith("transfer_to_"):
+                        print(f"Transferring to {func_name.split('_')[-1]}")
+                        # Get transfer function
+                        transfer_func = next(
+                            (
+                                f
+                                for f in active_agent.functions
+                                if f.__name__ == func_name
+                            ),
+                            None,
+                        )
+                        if not transfer_func:
+                            print(f"Error: Transfer function {func_name} not found")
+                            continue
+
+                        # Share completed function calls with the next agent
+                        next_agent = transfer_func()
+                        next_agent.completed_function_calls = (
+                            active_agent.completed_function_calls.copy()
+                        )
+                        next_agent.current_task = active_agent.current_task
+                        next_agent.messages = active_agent.messages.copy()
+
+                        active_agent = next_agent
+                        result = active_agent.send_message(user_input)
+                        if result.text:
+                            print(f"\n{result.text}")
+                        break  # Exit the loop after transfer
                     else:
-                        regular_functions.append(function_call)
-
-                # Execute all regular functions in batch
-                if regular_functions:
-                    for function_call in regular_functions:
-                        func_name = function_call["name"]
-                        params = function_call["parameters"]
-
+                        # Find and execute regular function
                         func = next(
                             (
                                 f
@@ -117,63 +150,54 @@ def main():
                             ),
                             None,
                         )
-                        if func:
-                            try:
-                                print(
-                                    f"Executing function {func_name} with params {params}"
-                                )
-                                func_result = func(**params)
-                                executed_functions.append(
-                                    f"Function {func_name} completed with result: {func_result}"
-                                )
-                                if func_name not in [
-                                    call["name"]
-                                    for call in active_agent.completed_function_calls
-                                ]:
-                                    active_agent.add_completed_function(
-                                        func_name, params
-                                    )
-                            except Exception as e:
-                                error_msg = (
-                                    f"Function {func_name} failed with error: {str(e)}"
-                                )
-                                print(error_msg)
-                                executed_functions.append(error_msg)
+                        if not func:
+                            print(f"Error: Function {func_name} not found")
+                            continue
 
-                    # Send all function results at once
-                    if executed_functions:
-                        print("Sending function results to agent:", executed_functions)
-                        result = active_agent.send_function_results(executed_functions)
-                        print(f"{active_agent.name} response:", result)
-                        continue
+                        try:
+                            func_result = func(**func_call["parameters"])
+                            result_msg = f"Function {func_name} completed with result: {func_result}"
+                            print(result_msg)
+                            executed_functions.append(result_msg)
+                            active_agent.add_completed_function(
+                                func_name, func_call["parameters"]
+                            )
+                        except Exception as e:
+                            error_msg = f"Error executing {func_name}: {str(e)}"
+                            print(error_msg)
+                            executed_functions.append(error_msg)
 
-                # Handle transfer if there are any transfer functions
-                if transfer_functions:
-                    function_call = transfer_functions[0]  # Process first transfer
-                    func_name = function_call["name"]
-                    func = next(
-                        (f for f in active_agent.functions if f.__name__ == func_name),
-                        None,
-                    )
-                    if func:
-                        print(f"Transferring to {func_name.split('_')[-1]}")
-                        # Share completed function calls with the next agent
-                        next_agent = func()
-                        next_agent.completed_function_calls = active_agent.completed_function_calls.copy()
-                        next_agent.current_task = active_agent.current_task
-                        active_agent = next_agent
-                        result = active_agent.send_message(user_input)
-                        print(f"{active_agent.name} response:", result)
-                        continue
+                # Send function results back to agent if any were executed
+                if executed_functions:
+                    result = active_agent.send_function_results(executed_functions)
+                    if result.text:
+                        print(f"\n{result.text}")
 
-                # If we get here with no executed functions and no transfers, break the loop
-                break
+                    # Return to orchestrator if we've completed all tasks
+                    if active_agent != orchestrator and not result.function_calls:
+                        print("\nReturning to orchestrator...")
+                        # Copy state back to orchestrator
+                        orchestrator.completed_function_calls = (
+                            active_agent.completed_function_calls.copy()
+                        )
+                        orchestrator.current_task = (
+                            None  # Reset task to force waiting for new input
+                        )
+                        orchestrator.messages = active_agent.messages.copy()
+
+                        active_agent = orchestrator
+                        print("\nWhat would you like to do next?")
+                        should_continue = False  # Stop processing until next user input
+                        break  # Exit the function processing loop
+
+            # Reset continuation flag for next user input
+            should_continue = True
 
         except KeyboardInterrupt:
             print("\nExiting...")
             break
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"\nError: {str(e)}")
             continue
 
 
