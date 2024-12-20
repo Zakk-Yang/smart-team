@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any
 from anthropic import Anthropic
-from .base_agent import BaseAgent
+from .base_agent import BaseAgent, AgentState
 from ..types import AgentResponse
 from dynamic_agent.utils.function_schema import create_function_schema, SchemaFormat
 
@@ -21,7 +21,6 @@ class AnthropicAgent(BaseAgent):
         self.completed_function_calls = []  # Track completed function calls with parameters
         self.current_task = None  # Store current task
         self.error_context = None  # Store error context for self-correction
-        self.returning_to_orchestrator = False  # Flag to track returns to orchestrator
 
     def _get_tool_schemas(self) -> List[Dict]:
         """Convert functions to Anthropic's tool format"""
@@ -37,14 +36,22 @@ class AnthropicAgent(BaseAgent):
         if not message.strip():
             return AgentResponse(text="", function_calls=[])
 
-        # If we're the orchestrator and we're returning from another agent
-        if self.name == "OrchestratorBot" and self.returning_to_orchestrator:
-            self.returning_to_orchestrator = False
-            return AgentResponse(
-                text="What would you like to do next?",
-                function_calls=[]
-            )
+        # Handle state transitions
+        if self.state == AgentState.COMPLETED:
+            if self.name == "OrchestratorBot":
+                self.reset()
+                return AgentResponse(
+                    text="What would you like to do next?",
+                    function_calls=[]
+                )
+            else:
+                self.start_transfer()
+                return AgentResponse(
+                    text="",
+                    function_calls=[{"name": "transfer_to_orchestrator", "parameters": {}}]
+                )
 
+        self.start_processing()
         tools = self._get_tool_schemas() if self.functions else []
 
         if not is_function_result:
@@ -108,6 +115,11 @@ class AnthropicAgent(BaseAgent):
         result.text = " ".join(text_parts) if text_parts else ""
         if result.text.strip():  # Only add non-empty responses to history
             self.messages.append({"role": "assistant", "content": result.text})
+
+        # Update state based on response
+        if not result.function_calls:
+            self.complete_task()
+
         return result
 
     def send_function_results(self, executed_functions: list[str]) -> AgentResponse:
@@ -119,18 +131,14 @@ class AnthropicAgent(BaseAgent):
 
         # For orchestrator, just wait for next input
         if self.name == "OrchestratorBot":
-            self.returning_to_orchestrator = False
+            self.reset()
             return AgentResponse(
                 text="What would you like to do next?",
                 function_calls=[]
             )
 
-        # For other agents, check if we need to return to orchestrator
+        # For other agents, continue with next steps
         message = f"The following functions have been executed:\n{function_results}"
-        if "transfer_to_orchestrator" in [call["name"] for call in self.completed_function_calls]:
-            self.returning_to_orchestrator = True
-            return AgentResponse(text="", function_calls=[])
-        
         return self.send_message(message, is_function_result=True)
 
     def add_completed_function(self, func_name: str, parameters: dict):

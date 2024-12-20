@@ -9,7 +9,7 @@ from smart_team.agents.agent_functions import (
     execute_code,
     get_weather,
 )
-from smart_team.agents.base_agent import BaseAgent
+from smart_team.agents.base_agent import BaseAgent, AgentState
 
 
 def main():
@@ -80,16 +80,12 @@ def main():
            - Consider those tasks as already done
            - DO NOT try to execute them again
            - DO NOT transfer to another bot to repeat them
-           
-        Remember: You should ONLY transfer to another bot when receiving a NEW request from the user,
-        NEVER when receiving control back after a completed task.
         """,
         api_key=api_key,
         functions=[transfer_to_code, transfer_to_weather],
     )
 
     active_agent = orchestrator
-    should_continue = True
 
     while True:
         try:
@@ -103,7 +99,7 @@ def main():
                 print(f"\n{result.text}")
 
             # Process any function calls
-            while result and result.function_calls and should_continue:
+            while result and result.function_calls:
                 executed_functions = []
                 current_calls = result.function_calls
                 result.function_calls = []  # Reset to avoid infinite loop
@@ -116,25 +112,19 @@ def main():
                         print(f"Transferring to {func_name.split('_')[-1]}")
                         # Get transfer function
                         transfer_func = next(
-                            (
-                                f
-                                for f in active_agent.functions
-                                if f.__name__ == func_name
-                            ),
-                            None,
+                            (f for f in active_agent.functions if f.__name__ == func_name),
+                            None
                         )
                         if not transfer_func:
                             print(f"Error: Transfer function {func_name} not found")
                             continue
 
-                        # Share completed function calls with the next agent
+                        # Share state with the next agent
                         next_agent = transfer_func()
-                        next_agent.completed_function_calls = (
-                            active_agent.completed_function_calls.copy()
-                        )
+                        next_agent.completed_function_calls = active_agent.completed_function_calls.copy()
                         next_agent.current_task = active_agent.current_task
                         next_agent.messages = active_agent.messages.copy()
-
+                        
                         active_agent = next_agent
                         result = active_agent.send_message(user_input)
                         if result.text:
@@ -143,12 +133,8 @@ def main():
                     else:
                         # Find and execute regular function
                         func = next(
-                            (
-                                f
-                                for f in active_agent.functions
-                                if f.__name__ == func_name
-                            ),
-                            None,
+                            (f for f in active_agent.functions if f.__name__ == func_name),
+                            None
                         )
                         if not func:
                             print(f"Error: Function {func_name} not found")
@@ -159,9 +145,7 @@ def main():
                             result_msg = f"Function {func_name} completed with result: {func_result}"
                             print(result_msg)
                             executed_functions.append(result_msg)
-                            active_agent.add_completed_function(
-                                func_name, func_call["parameters"]
-                            )
+                            active_agent.add_completed_function(func_name, func_call["parameters"])
                         except Exception as e:
                             error_msg = f"Error executing {func_name}: {str(e)}"
                             print(error_msg)
@@ -173,25 +157,15 @@ def main():
                     if result.text:
                         print(f"\n{result.text}")
 
-                    # Return to orchestrator if we've completed all tasks
-                    if active_agent != orchestrator and not result.function_calls:
+                    # Check if task is completed and we need to return to orchestrator
+                    if active_agent.is_completed() and active_agent != orchestrator:
                         print("\nReturning to orchestrator...")
                         # Copy state back to orchestrator
-                        orchestrator.completed_function_calls = (
-                            active_agent.completed_function_calls.copy()
-                        )
-                        orchestrator.current_task = (
-                            None  # Reset task to force waiting for new input
-                        )
+                        orchestrator.completed_function_calls = active_agent.completed_function_calls.copy()
                         orchestrator.messages = active_agent.messages.copy()
-
+                        orchestrator.reset()  # Reset state to ready
                         active_agent = orchestrator
-                        print("\nWhat would you like to do next?")
-                        should_continue = False  # Stop processing until next user input
-                        break  # Exit the function processing loop
-
-            # Reset continuation flag for next user input
-            should_continue = True
+                        break  # Exit function processing loop
 
         except KeyboardInterrupt:
             print("\nExiting...")
