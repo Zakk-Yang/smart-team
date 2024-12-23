@@ -18,7 +18,9 @@ class AnthropicAgent(BaseAgent):
             raise ValueError("api_key is required for AnthropicAgent")
         self.client = Anthropic(api_key=api_key)
         self.messages = []  # Store conversation history
-        self.completed_function_calls = []  # Track completed function calls with parameters
+        self.completed_function_calls = (
+            []
+        )  # Track completed function calls with parameters
         self.current_task = None  # Store current task
         self.error_context = None  # Store error context for self-correction
 
@@ -41,14 +43,15 @@ class AnthropicAgent(BaseAgent):
             if self.name == "OrchestratorBot":
                 self.reset()
                 return AgentResponse(
-                    text="What would you like to do next?",
-                    function_calls=[]
+                    text="What would you like to do next?", function_calls=[]
                 )
             else:
                 self.start_transfer()
                 return AgentResponse(
                     text="",
-                    function_calls=[{"name": "transfer_to_orchestrator", "parameters": {}}]
+                    function_calls=[
+                        {"name": "transfer_to_orchestrator", "parameters": {}}
+                    ],
                 )
 
         self.start_processing()
@@ -63,7 +66,8 @@ class AnthropicAgent(BaseAgent):
 
         # Filter out empty messages and system messages
         valid_messages = [
-            msg for msg in self.messages
+            msg
+            for msg in self.messages
             if msg["role"] != "system" and msg.get("content", "").strip()
         ]
 
@@ -77,7 +81,9 @@ class AnthropicAgent(BaseAgent):
                 f"{call['name']}({', '.join(f'{k}={v}' for k, v in call['parameters'].items())})"
                 for call in self.completed_function_calls
             ]
-            system_message += f"\n\nPreviously executed function calls: {', '.join(completed_calls)}"
+            system_message += (
+                f"\n\nPreviously executed function calls: {', '.join(completed_calls)}"
+            )
 
         if self.error_context:
             system_message += f"\n\nError Context: {self.error_context}"
@@ -106,10 +112,14 @@ class AnthropicAgent(BaseAgent):
                     "name": block.name,
                     "parameters": block.input,
                 }
-                if not any(
-                    call["name"] == func_call["name"] and call["parameters"] == func_call["parameters"]
-                    for call in self.completed_function_calls
-                ) or self.error_context:
+                if (
+                    not any(
+                        call["name"] == func_call["name"]
+                        and call["parameters"] == func_call["parameters"]
+                        for call in self.completed_function_calls
+                    )
+                    or self.error_context
+                ):
                     result.function_calls.append(func_call)
 
         result.text = " ".join(text_parts) if text_parts else ""
@@ -133,8 +143,7 @@ class AnthropicAgent(BaseAgent):
         if self.name == "OrchestratorBot":
             self.reset()
             return AgentResponse(
-                text="What would you like to do next?",
-                function_calls=[]
+                text="What would you like to do next?", function_calls=[]
             )
 
         # For other agents, continue with next steps
