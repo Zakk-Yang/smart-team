@@ -15,6 +15,8 @@ A flexible and extensible framework for building multi-agent systems with suppor
   - Web search
   - Code assistance
 - Dynamic agent switching based on task requirements
+- You can define your own agents and functions
+- Currently, it is for educational purposes only, not for production use
 
 ## Installation
 
