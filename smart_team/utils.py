@@ -57,6 +57,28 @@ def create_function_schema(
 
         return schema
 
+    elif format == SchemaFormat.OPENAI:
+        # Create schema in OpenAI's tool format
+        schema = {
+            "name": func.__name__,
+            "description": doc,
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        }
+
+        for name, param in sig.parameters.items():
+            if name == "self":
+                continue
+
+            schema["parameters"]["properties"][name] = {
+                "type": _get_type(param.annotation),
+                "description": f"Parameter: {name}",
+            }
+
+            if param.default == inspect.Parameter.empty:
+                schema["parameters"]["required"].append(name)
+
+        return schema
+
     else:
         # Basic schema for other formats
         schema = {

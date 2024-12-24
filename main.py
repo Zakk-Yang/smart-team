@@ -15,6 +15,7 @@ from smart_team.agents.agent_functions import (
 )
 from smart_team.agents.base_agent import BaseAgent
 from smart_team.agents.anthropic_agent import AnthropicAgent
+from smart_team.agents.openai_agent import OpenAIAgent
 
 
 def transfer_to_weather(task: str) -> BaseAgent:
@@ -50,22 +51,24 @@ def transfer_to_code(task: str) -> BaseAgent:
 
 
 # Initialize the weather bot
-weather_bot = AnthropicAgent(
-    api_key=os.getenv("ANTHROPIC_API_KEY"),
+weather_bot = OpenAIAgent(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    model="gpt-4o-mini",
     name="WeatherBot",
     instructions="""
     You are the weather bot. Your role is to:
     1. Get weather information for specified locations
     2. After completing the task, return control to orchestrator
     3. DO NOT suggest additional weather checks unless asked by the user
-    4. Initiaate multiple functions in the same result
+    4. Initiaite multiple functions in the same result
     """,
     functions=[get_weather, transfer_to_orchestrator],
 )
 
 # Initialize the weather bot
-search_bot = AnthropicAgent(
-    api_key=os.getenv("ANTHROPIC_API_KEY"),
+search_bot = OpenAIAgent(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    model="gpt-4o-mini",
     name="SearchBot",
     instructions="""
     You are the Search bot. Your role is to:
@@ -80,11 +83,12 @@ search_bot = AnthropicAgent(
 # Initialize the code bot
 code_bot = AnthropicAgent(
     name="CodeBot",
+    model="claude-3-5-sonnet-20241022",
     instructions="""
     You are the coding assistant. Your role is to:
     1. Help users with coding tasks and questions
     2. Create env (stick to the env name as python_env), install packages, generate and debug code
-    3. Initiaate multiple functions in the same result(create_virtualenv, install_package, execute_code, transfer_to_orchestrator)
+    3. Initiaite multiple functions in the same result(create_virtualenv, install_package, execute_code, transfer_to_orchestrator)
     4. After completing a task, return control to orchestrator
     5. DO NOT suggest additional coding tasks unless asked by the user
     6. Always transfer control back to the orchestrator using transfer_to_orchestrator
@@ -99,8 +103,9 @@ code_bot = AnthropicAgent(
 )
 
 # Initialize the orchestrator
-orchestrator = AnthropicAgent(
-    api_key=os.getenv("ANTHROPIC_API_KEY"),
+orchestrator = OpenAIAgent(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    model="gpt-4o-mini",
     is_orchestrator=True,
     name="OrchestratorBot",
     instructions="""
@@ -114,7 +119,11 @@ orchestrator = AnthropicAgent(
     3. Always summarize what have been done and what errors have been made
     4. When loads of information is retrieved(for example, multiple search results), always make good structure of it using bullet points
     """,
-    functions=[transfer_to_weather, transfer_to_code, transfer_to_search],
+    functions=[
+        transfer_to_weather,
+        transfer_to_search,
+        transfer_to_code,
+    ],
 )
 
 
