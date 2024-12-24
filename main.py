@@ -16,6 +16,7 @@ from smart_team.agents.agent_functions import (
 from smart_team.agents.base_agent import BaseAgent
 from smart_team.agents.anthropic_agent import AnthropicAgent
 from smart_team.agents.openai_agent import OpenAIAgent
+from smart_team.agents.ollama_agent import OllamaAgent
 
 
 def transfer_to_weather(task: str) -> BaseAgent:
@@ -83,7 +84,7 @@ search_bot = OpenAIAgent(
 # Initialize the code bot
 code_bot = AnthropicAgent(
     name="CodeBot",
-    model="claude-3-5-sonnet-20241022",
+    model="claude-3-5-sonnet-latest",
     instructions="""
     You are the coding assistant. Your role is to:
     1. Help users with coding tasks and questions
@@ -103,9 +104,9 @@ code_bot = AnthropicAgent(
 )
 
 # Initialize the orchestrator
-orchestrator = OpenAIAgent(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    model="gpt-4o-mini",
+orchestrator = AnthropicAgent(
+    api_key=os.getenv("ANTHROPIC_API_KEY"),
+    model="claude-3-5-sonnet-latest",
     is_orchestrator=True,
     name="OrchestratorBot",
     instructions="""
