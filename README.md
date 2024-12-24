@@ -17,6 +17,7 @@ A flexible and extensible framework for building multi-agent systems with suppor
 - Dynamic agent switching based on task requirements
 - You can define your own agents and functions
 - Currently, it is for educational purposes only, not for production use
+- Run the main.py file to start the agent framework (don't forget to set up your API keys in the .env file)
 
 ## Installation
 
