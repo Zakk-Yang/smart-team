@@ -4,8 +4,7 @@
 sequenceDiagram
     participant User
     participant Orchestrator
-    participant Agent1
-    participant Agent2
+    participant AnthropicAgent
     participant FunctionExecutor
     participant SharedContext
 
@@ -17,83 +16,95 @@ sequenceDiagram
         SharedContext-->>Orchestrator: Return Context
     end
 
-    alt Task Type 1
-        Orchestrator->>Agent1: Transfer Control
+    Orchestrator->>AnthropicAgent: Transfer Control
+    
+    rect rgb(220, 200, 255)
+        Note over AnthropicAgent: Process Task
+        AnthropicAgent->>SharedContext: Load Context
+        SharedContext-->>AnthropicAgent: Return Context
         
-        rect rgb(220, 200, 255)
-            Note over Agent1: Process Task Type 1
-            Agent1->>SharedContext: Load Context
-            SharedContext-->>Agent1: Return Context
-            
-            loop Batch Execution
-                Agent1->>FunctionExecutor: Execute Functions
-                FunctionExecutor-->>Agent1: Return Results
-                Agent1->>SharedContext: Update Context
-            end
+        loop Message Processing
+            AnthropicAgent->>AnthropicAgent: Process Message
+            AnthropicAgent->>FunctionExecutor: Execute Tool Calls
+            FunctionExecutor-->>AnthropicAgent: Return Results
+            AnthropicAgent->>SharedContext: Update Context
         end
-        
-        alt Needs Agent2
-            Agent1->>Agent2: Transfer for Subtask
-            
-            rect rgb(200, 255, 220)
-                Note over Agent2: Process Subtask
-                Agent2->>SharedContext: Load Context
-                Agent2->>FunctionExecutor: Execute Functions
-                FunctionExecutor-->>Agent2: Return Results
-                Agent2->>SharedContext: Update Context
-            end
-            
-            Agent2->>Agent1: Return Control
-        end
-        
-        Agent1->>Orchestrator: Return Control
-    else Task Type 2
-        Orchestrator->>Agent2: Transfer Control
-        
-        rect rgb(200, 255, 220)
-            Note over Agent2: Process Task Type 2
-            Agent2->>SharedContext: Load Context
-            SharedContext-->>Agent2: Return Context
-            Agent2->>FunctionExecutor: Execute Functions
-            FunctionExecutor-->>Agent2: Return Results
-            Agent2->>SharedContext: Update Context
-        end
-        
-        Agent2->>Orchestrator: Return Control
     end
-
+    
+    AnthropicAgent->>Orchestrator: Return Control
     Orchestrator-->>User: Return Response
 ```
 
-## System Flow Example
+## System Components
 
-1. **Initial Request Handling**
-   - User sends request to Orchestrator
-   - Orchestrator analyzes task type and context
-   - Decides whether to route to Agent1 or Agent2
+1. **Orchestrator**
+   - Handles initial request routing
+   - Manages agent selection and control flow
+   - Maintains system coordination
 
-2. **Agent Interaction Patterns**
-   - **Pattern 1: Direct Processing**
-     * Orchestrator → Agent2 → Orchestrator
-     * Used for simple, single-agent tasks
-   
-   - **Pattern 2: Agent Collaboration**
-     * Orchestrator → Agent1 → Agent2 → Agent1 → Orchestrator
-     * Used for complex tasks requiring multiple agents
+2. **AnthropicAgent**
+   - Based on Claude-3 model
+   - Processes messages and generates responses
+   - Executes tool calls through function executor
+   - Maintains conversation memory
 
-3. **Context Management**
-   - SharedContext maintains system state
-   - All agents access the same context
-   - History tracked across agent transfers
+3. **Function Executor**
+   - Handles tool execution
+   - Processes function calls from agents
+   - Returns results to the calling agent
 
-4. **Function Execution**
-   - Agents can execute functions in batches
-   - Results update shared context
-   - State maintained throughout process
+4. **Shared Context**
+   - Maintains system state
+   - Stores conversation history
+   - Provides context for agent decisions
 
-## Implementation Notes
+## Message Flow
 
-- **Agent1 Example**: Could handle complex tasks requiring batch processing
-- **Agent2 Example**: Could handle simpler, single-function tasks
-- Both agents follow same context-sharing protocol
-- System can be extended with more agents following these patterns
+1. **Request Handling**
+   - User initiates request to Orchestrator
+   - Orchestrator analyzes task and context
+   - Control transferred to appropriate agent
+
+2. **Message Processing**
+   - Agent receives message with context
+   - Processes using Claude-3 model
+   - Generates text responses and/or tool calls
+   - Updates shared context with results
+
+3. **Tool Execution**
+   - Tools defined using function schemas
+   - Agent makes tool calls as needed
+   - Results integrated into response
+   - Context updated with execution results
+
+## Implementation Details
+
+1. **Agent Configuration**
+   - Initialized with name and instructions
+   - Configured with specific model (e.g., claude-3-sonnet)
+   - Tool schemas provided for function execution
+
+2. **Message Handling**
+   - Messages processed in conversation format
+   - Responses include text and tool calls
+   - Tool calls executed through function executor
+   - Results maintained in agent memory
+
+3. **Tool Integration**
+   - Tools defined using Anthropic schema format
+   - Function calls tracked and validated
+   - Results integrated into response flow
+   - Context updated after execution
+
+4. **State Management**
+   - Conversation history maintained
+   - Tool execution results preserved
+   - Context shared across interactions
+   - Memory persisted for continuity
+
+## Extension Points
+
+- Additional agent types can be implemented
+- New tools can be added via function schemas
+- Context sharing protocols can be enhanced
+- Memory management can be customized
